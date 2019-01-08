@@ -171,11 +171,11 @@ class MADDPGAgentTrainer(AgentTrainer):
         act_n = []
         index = self.replay_sample_index
         for i in range(self.n):
-            obs, act, rew, obs_next, done = agents[i].replay_buffer.sample_index(index)
+            obs, act, _, obs_next, _ = agents[i].replay_buffer.sample_index(index)
             obs_n.append(obs)
             obs_next_n.append(obs_next)
             act_n.append(act)
-        obs, act, rew, obs_next, done = self.replay_buffer.sample_index(index)
+        _, _, rew, _, done = self.replay_buffer.sample_index(index)
 
         # train q network
         num_sample = 1
