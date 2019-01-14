@@ -150,7 +150,8 @@ def make_env(scenario_name, local_observation=True,
         elif scenario_name == 'simple_speaker_listener':
             scenario.observation = local_obs_simple_speaker_listener.__get__(scenario)
         elif scenario_name == 'multi_speaker_listener':
-            scenario.observation = local_obs_multi_speaker_listener.__get__(scenario)
+            # scenario.observation = local_obs_multi_speaker_listener.__get__(scenario)
+            print('origin')
         elif scenario_name == 'fullobs_collect_treasure':
             scenario.observation = local_obs_collect_treasure.__get__(scenario)
         else:
