@@ -191,6 +191,8 @@ if __name__ == '__main__':
     scenarios = ['simple_spread', 'simple_reference', 'simple_speaker_listener',
                  'fullobs_collect_treasure', 'multi_speaker_listener']
 
+    scenarios = ['simple_speaker_listener']
+
     for scenario_name in scenarios:
         for cnt in range(10):
             tf.reset_default_graph()
