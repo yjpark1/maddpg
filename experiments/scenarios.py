@@ -182,6 +182,7 @@ def make_env(scenario_name, local_observation=False,
     env.force_discrete_action = True
     print('observation shape: ', env.observation_space)
     print('action shape: ', env.action_space)
+    print('aaa')
 
     return env
 

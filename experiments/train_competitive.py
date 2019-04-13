@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument("--plots-dir", type=str, default="./learning_curves/", help="directory where plot data is saved")
     return parser.parse_args()
 
+
 def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=None):
     # This model takes as input an observation and returns values of all actions
     with tf.variable_scope(scope, reuse=reuse):
@@ -64,6 +65,12 @@ def get_trainers(env, num_adversaries, obs_shape_n, arglist):
     return trainers
 
 
+def split_own_adv(env, z):
+    z_own = [y for x, y in zip(env.agents, z) if not x.adversary]
+    z_adv = [y for x, y in zip(env.agents, z) if x.adversary]
+    return z_own, z_adv
+
+
 def train(scenario_name, cnt, arglist):
     with U.single_threaded_session():
         # Create environment
@@ -86,9 +93,11 @@ def train(scenario_name, cnt, arglist):
             print('Loading previous state...')
             U.load_state(arglist.load_dir)
 
-        episode_rewards = [0.0]  # sum of rewards for all agents
+        episode_rewards_own = [0.0]  # sum of rewards for our agents
+        episode_rewards_adv = [0.0]  # sum of rewards for adversary agents
         agent_rewards = [[0.0] for _ in range(env.n)]  # individual agent reward
-        final_ep_rewards = []  # sum of rewards for training curve
+        final_ep_rewards_own = []  # sum of rewards for training curve
+        final_ep_rewards_adv = []  # sum of rewards for training curve
         final_ep_ag_rewards = []  # agent rewards for training curve
         agent_info = [[[]]]  # placeholder for benchmarking info
         saver = tf.train.Saver()
@@ -105,7 +114,15 @@ def train(scenario_name, cnt, arglist):
             new_obs_n, rew_n, done_n, info_n = env.step(action_n)
 
             # make shared reward
-            rew_shared = [np.sum(rew_n)] * env.n
+            rew_own, rew_adv = split_own_adv(env, rew_n)
+            rew_own = np.sum(rew_own)
+            rew_adv = np.sum(rew_adv)
+            rew_shared = []
+            for a in env.agents:
+                if a.adversary:
+                    rew_shared.append(rew_adv)
+                else:
+                    rew_shared.append(rew_own)
 
             episode_step += 1
             done = all(done_n)
@@ -115,14 +132,18 @@ def train(scenario_name, cnt, arglist):
                 agent.experience(obs_n[i], action_n[i], rew_shared[i], new_obs_n[i], done_n[i], terminal)
             obs_n = new_obs_n
 
-            for i, rew in enumerate(rew_n):
-                episode_rewards[-1] += rew
+            for i, (ag, rew) in enumerate(zip(env.agents, rew_n)):
+                if ag.adversary:
+                    episode_rewards_adv[-1] += rew
+                else:
+                    episode_rewards_own[-1] += rew
                 agent_rewards[i][-1] += rew
 
             if done or terminal:
                 obs_n = env.reset()
                 episode_step = 0
-                episode_rewards.append(0)
+                episode_rewards_own.append(0)
+                episode_rewards_adv.append(0)
                 for a in agent_rewards:
                     a.append(0)
                 agent_info.append([[]])
@@ -156,33 +177,30 @@ def train(scenario_name, cnt, arglist):
                 loss = agent.update(trainers, train_step)
 
             # save model, display training output
-            if terminal and (len(episode_rewards) % arglist.save_rate == 0):
+            if terminal and (len(episode_rewards_own) % arglist.save_rate == 0):
                 # print statement depends on whether or not there are adversaries
-                if num_adversaries == 0:
-                    print("steps: {}, episodes: {}, mean episode reward: {}, time: {}".format(
-                        train_step, len(episode_rewards), np.mean(episode_rewards[-arglist.save_rate:]), round(time.time()-t_start, 3)))
-                else:
-                    print("steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}".format(
-                        train_step, len(episode_rewards), np.mean(episode_rewards[-arglist.save_rate:]),
-                        [np.mean(rew[-arglist.save_rate:]) for rew in agent_rewards], round(time.time()-t_start, 3)))
+                print("steps: {}, episodes: {}, reward (our): {}, reward (adv): {}, time: {}".format(
+                    train_step, len(episode_rewards_own),
+                    round(np.mean(episode_rewards_own[-arglist.save_rate:]), 3),
+                    round(np.mean(episode_rewards_adv[-arglist.save_rate:]), 3),
+                    round(time.time() - t_start, 3)))
                 t_start = time.time()
                 # Keep track of final episode reward
-                final_ep_rewards.append(np.mean(episode_rewards[-arglist.save_rate:]))
+                final_ep_rewards_own.append(np.mean(episode_rewards_own[-arglist.save_rate:]))
+                final_ep_rewards_adv.append(np.mean(episode_rewards_adv[-arglist.save_rate:]))
                 for rew in agent_rewards:
                     final_ep_ag_rewards.append(np.mean(rew[-arglist.save_rate:]))
 
             # saves final episode reward for plotting training curve later
-            if len(episode_rewards) > arglist.num_episodes:
-                hist = {'reward_episodes': episode_rewards, 'reward_episodes_by_agents': agent_rewards}
+            if len(episode_rewards_own) > arglist.num_episodes:
+                hist = {'reward_episodes_own': episode_rewards_own,
+                        'reward_episodes_adv': episode_rewards_adv,
+                        'reward_episodes_by_agents': agent_rewards}
                 file_name = 'Models/history_' + scenario_name + '_' + str(cnt) + '.pkl'
                 with open(file_name, 'wb') as fp:
                     pickle.dump(hist, fp)
-                print('...Finished total of {} episodes.'.format(len(episode_rewards)))
-
-                file_model = 'Models/' + scenario_name + '_fin_' + str(cnt) + '.pkl'
-                U.save_state(file_model, saver=saver)
+                print('...Finished total of {} episodes.'.format(len(episode_rewards_own)))
                 break
-
 
 def test(scenario_name, cnt, arglist):
     with U.single_threaded_session():
@@ -302,10 +320,10 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
-    TEST_ONLY = True
+    TEST_ONLY = False
 
-    scenarios = ['simple_spread', 'simple_reference', 'simple_speaker_listener',
-                 'fullobs_collect_treasure', 'multi_speaker_listener']
+    scenarios = ['simple_adversary', 'simple_crypto', 'simple_push',
+                 'simple_tag', 'simple_world_comm']
 
     for scenario_name in scenarios:
         for cnt in range(10):
