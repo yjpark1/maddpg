@@ -320,7 +320,7 @@ def test(scenario_name, cnt, arglist):
 if __name__ == '__main__':
     import os
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
     TEST_ONLY = False
 
@@ -328,7 +328,7 @@ if __name__ == '__main__':
                  'simple_tag', 'simple_world_comm']
 
     for scenario_name in scenarios:
-        for cnt in range(10):
+        for cnt in range(3, 6):
             tf.reset_default_graph()
             seed = cnt + 12345678
             np.random.seed(seed)

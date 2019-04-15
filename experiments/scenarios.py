@@ -160,6 +160,7 @@ def make_env(scenario_name, local_observation=False,
     # create world
     world = scenario.make_world()
     world.collaborative = False  # to get individual reward
+    world.shaped_reward = True # to shaped reward
 
     # create multiagent environment
     if hasattr(scenario, 'post_step'):

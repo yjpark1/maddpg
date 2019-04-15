@@ -328,7 +328,7 @@ if __name__ == '__main__':
                  'simple_tag', 'simple_world_comm']
 
     for scenario_name in scenarios:
-        for cnt in range(10):
+        for cnt in range(6, 8):
             tf.reset_default_graph()
             seed = cnt + 12345678
             np.random.seed(seed)
