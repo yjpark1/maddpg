@@ -6,6 +6,7 @@ import pickle
 
 import maddpg.common.tf_util as U
 from maddpg.trainer.maddpg import MADDPGAgentTrainer
+from maddpg.trainer.maddpg import MADDPGAgentTrainerSplit
 import tensorflow.contrib.layers as layers
 
 from experiments.scenarios import make_env
@@ -49,7 +50,27 @@ def mlp_model(input, num_outputs, scope, reuse=False, num_units=64, rnn_cell=Non
         out = layers.fully_connected(out, num_outputs=num_outputs, activation_fn=None)
         return out
 
+'''
+def get_trainers(env, obs_shape_n, arglist):
+    trainers = []
+    model = mlp_model
+    trainer = MADDPGAgentTrainerSplit
+    agent = env.agents
 
+    for i in range(env.n):
+        if agent[i].adversary:
+            team = 'adv'
+            trainers.append(trainer(
+                "agent_%d" % i, model, agent, team, obs_shape_n, env.action_space, i, arglist,
+                local_q_func=(arglist.adv_policy=='ddpg')))
+        else:
+            team = 'own'
+            trainers.append(trainer(
+                "agent_%d" % i, model, agent, team, obs_shape_n, env.action_space, i, arglist,
+                local_q_func=(arglist.adv_policy == 'ddpg')))
+
+    return trainers
+'''
 def get_trainers(env, num_adversaries, obs_shape_n, arglist):
     trainers = []
     model = mlp_model
@@ -173,9 +194,19 @@ def train(scenario_name, cnt, arglist):
             loss = None
             for agent in trainers:
                 agent.preupdate()
-            for agent in trainers:
-                loss = agent.update(trainers, train_step)
 
+            for agent in trainers:
+                agent.update(trainers, train_step)
+
+            '''
+            trainers_own = [x for a, x in zip(env.agents, trainers) if a.adversary]
+            trainers_adv = [x for a, x in zip(env.agents, trainers) if not a.adversary]
+            for env_agent, agent in zip(env.agents, trainers):
+                if env_agent.adversary:
+                    agent.update(trainers_adv, train_step)
+                else:
+                    agent.update(trainers_own, train_step)
+            '''
             # save model, display training output
             if terminal and (len(episode_rewards_own) % arglist.save_rate == 0):
                 # print statement depends on whether or not there are adversaries
